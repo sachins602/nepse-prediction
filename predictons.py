@@ -1,4 +1,3 @@
-import time
 import numpy as np
 import math as math
 import pandas as pd
@@ -13,21 +12,37 @@ from datetime import timedelta, datetime
 import mysql.connector
 from sqlalchemy import create_engine
 
-# sectors = ['corporate_debentures_predictions', 'microfinance_predictions', 'commercial_banks_predictions',
-#            'non_life_insurance_predictions', 'hydro_powers_predictions', 'life_insurance_predictions', 'finance_predictions',
-#            'tradings_predictions', 'manufacturing_and_processing_predictions', 'investment_predictions', 'hotels_predictions',
-#            'development_banks_predictions', 'mutual_fund_predictions', 'other_predictions']
+sectors = ['corporate_debentures_predictions', 'microfinance_predictions', 'commercial_banks_predictions',
+           'non_life_insurance_predictions', 'hydro_powers_predictions', 'life_insurance_predictions', 'finance_predictions',
+           'tradings_predictions', 'manufacturing_and_processing_predictions', 'investment_predictions', 'hotels_predictions',
+           'development_banks_predictions', 'mutual_fund_predictions', 'other_predictions']
 
 
-db = mysql.connector.connect(host='localhost', user='root', password='', database="stock")
+db = mysql.connector.connect(host='localhost', user='root', password='', database='stock')
 cursor = db.cursor(buffered =True)
 # database_name = 'stock'
 # cursor.execute("CREATE DATABASE "+database_name) #remove this code if you have already created a Db named 'stocks'
-# for sector in sectors:
-#    cursor.execute("CREATE TABLE IF NOT EXISTS "+sector +" (`Scrip` VARCHAR(10),`Time` DOUBLE, `Close` VARCHAR(20), `Prediction` VARCHAR(20))")
-#    db.commit()
-#    cursor.close()
-#    db.close()
+for sector in sectors:
+   print("DELETE FROM " + sector)
+   cursor.execute("DELETE FROM " + sector)
+   db.commit()
+
+cursor.close()   
+
+def future_value_pred(last_70_days_scaled,model,scaler):
+    data_list = last_70_days_scaled.tolist()
+    pred_val_list = []
+    for i in range(0,7):
+        data_list_x = data_list[i:]
+        x_input = np.array(data_list_x)
+        x_input = x_input.reshape(1,-1,1)
+        pred_val = model.predict(x_input)
+        data_list_end_ele = pred_val[0].tolist()
+        pred_val = scaler.inverse_transform(pred_val)
+        pred_val_list.append(float(pred_val[0][0]))
+        data_list = data_list + [data_list_end_ele]
+    return pred_val_list
+
 
 def corporate_debentures_prediction():
    
@@ -103,7 +118,7 @@ def corporate_debentures_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -130,7 +145,7 @@ def corporate_debentures_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -140,7 +155,7 @@ def corporate_debentures_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -166,15 +181,26 @@ def corporate_debentures_prediction():
         last_thirty_df.reset_index(drop=True,inplace=True)
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
-
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler)
+        
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='corporate_debentures_predictions', con=engine, if_exists = 'append', index=False)
 
 
@@ -252,7 +278,7 @@ def microfinance_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -279,7 +305,7 @@ def microfinance_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -289,7 +315,7 @@ def microfinance_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -316,14 +342,25 @@ def microfinance_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='microfinance_predictions', con=engine, if_exists = 'append', index=False)
 
         
@@ -402,7 +439,7 @@ def commercial_bank_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -429,7 +466,7 @@ def commercial_bank_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-30:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -439,7 +476,7 @@ def commercial_bank_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -466,14 +503,25 @@ def commercial_bank_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='commercial_banks_predictions', con=engine, if_exists = 'append', index=False)    
     
     
@@ -552,7 +600,7 @@ def non_life_insurance_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -579,7 +627,7 @@ def non_life_insurance_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -589,7 +637,7 @@ def non_life_insurance_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -616,14 +664,25 @@ def non_life_insurance_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='non_life_insurance_predictions', con=engine, if_exists = 'append', index=False)
 
     
@@ -703,7 +762,7 @@ def hydro_powers_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -730,7 +789,7 @@ def hydro_powers_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -740,7 +799,7 @@ def hydro_powers_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -767,14 +826,25 @@ def hydro_powers_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='hydro_powers_predictions', con=engine, if_exists = 'append', index=False)    
     
     
@@ -854,7 +924,7 @@ def life_insurance_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -881,7 +951,7 @@ def life_insurance_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -891,7 +961,7 @@ def life_insurance_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -918,14 +988,25 @@ def life_insurance_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='life_insurance_predictions', con=engine, if_exists = 'append', index=False)    
     
     
@@ -1005,7 +1086,7 @@ def finance_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1032,7 +1113,7 @@ def finance_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1042,7 +1123,7 @@ def finance_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1069,14 +1150,25 @@ def finance_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='finance_predictions', con=engine, if_exists = 'append', index=False)    
     
 
@@ -1155,7 +1247,7 @@ def tradings_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1182,7 +1274,7 @@ def tradings_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1192,7 +1284,7 @@ def tradings_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1219,14 +1311,25 @@ def tradings_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='tradings_predictions', con=engine, if_exists = 'append', index=False)
     
     
@@ -1308,7 +1411,7 @@ def manufacturing_and_processing_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1335,7 +1438,7 @@ def manufacturing_and_processing_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1345,7 +1448,7 @@ def manufacturing_and_processing_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1372,14 +1475,25 @@ def manufacturing_and_processing_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='manufacturing_and_processing_predictions', con=engine, if_exists = 'append', index=False)    
     
     
@@ -1459,7 +1573,7 @@ def investment_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1486,7 +1600,7 @@ def investment_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1496,7 +1610,7 @@ def investment_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1523,14 +1637,25 @@ def investment_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='investment_predictions', con=engine, if_exists = 'append', index=False)
     
     
@@ -1610,7 +1735,7 @@ def hotels_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1637,7 +1762,7 @@ def hotels_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1647,7 +1772,7 @@ def hotels_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1674,14 +1799,25 @@ def hotels_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='hotels_predictions', con=engine, if_exists = 'append', index=False)    
 
     
@@ -1760,7 +1896,7 @@ def development_banks_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1787,7 +1923,7 @@ def development_banks_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1797,7 +1933,7 @@ def development_banks_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1824,14 +1960,25 @@ def development_banks_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='development_banks_predictions', con=engine, if_exists = 'append', index=False)
     
 
@@ -1911,7 +2058,7 @@ def mutual_fund_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -1938,7 +2085,7 @@ def mutual_fund_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -1948,7 +2095,7 @@ def mutual_fund_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -1975,14 +2122,25 @@ def mutual_fund_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = ['0','0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='mutual_fund_predictions', con=engine, if_exists = 'append', index=False)
 
 
@@ -2063,7 +2221,7 @@ def other_prediction():
 
         model.compile(optimizer='adam', loss='mean_squared_error')
 
-        model.fit(x_train, y_train, batch_size=20, epochs=100)
+        model.fit(x_train, y_train, batch_size=10, epochs=50)
 
 
         test_data = scaled_data[training_data_len - 70: , :]
@@ -2090,7 +2248,7 @@ def other_prediction():
 
 
         new_df = df3.filter(['Close'])
-        last_70_days = new_df[-70:].values
+        last_70_days = new_df.iloc[-70:].values
         last_70_days_scaled = scaler.transform(last_70_days)
         X_test = []
         X_test.append(last_70_days_scaled)
@@ -2100,7 +2258,7 @@ def other_prediction():
         pred_price = scaler.inverse_transform(pred_price)
         print(pred_price)
 
-        
+        #yaa bata gareko bujhdainas taile chodde vai
         int_price = pred_price[0][0]
         int_price1 = format(int_price, ".2f")
 
@@ -2109,12 +2267,12 @@ def other_prediction():
         today_price = df3.tail(1)
         result = today_price.to_string(index = False)
 
-        tomorrow = time.time() + 86400
-        # today_date = today.strftime("%Y/%m/%d")
-        # today = datetime.now() # get date and time today
-        # delta = timedelta(days=1) #initialize delta
-        # date = today + delta # add the delta days
-        # tomorrow_date = date # format it
+        # today = datetime.today()
+        #today_date = today.strftime("%Y/%m/%d")
+        #today = datetime.now() # get date and time today
+        #delta = timedelta(days=1) #initialize delta
+        #date = today + delta # add the delta days
+        #tomorrow_date = date # format it
 
 
 
@@ -2127,14 +2285,25 @@ def other_prediction():
         final_df = pd.concat([last_thirty_df,predictions],axis=1,join='inner')
 
 
-        final_df.loc[i] = [tomorrow,'0',price]
+        next_seven_days = [] #### contains next seven day date
+        one_day_unix_time = 24*60*60
+        df_last_date = last_thirty_df['Time'].iloc[-1]
+        liv = final_df.index.values[-1]
+        for i in range(0,7):
+            df_last_date = df_last_date + one_day_unix_time
+            next_seven_days.append(df_last_date)
+    
+        next_seven_days_prediction = future_value_pred(last_70_days_scaled,model,scaler) ###### create yourself
+        for date,pred_price in zip(next_seven_days,next_seven_days_prediction):
+            liv=liv+1
+            final_df.loc[liv] = [date, '0', pred_price]
 
 
         final_df['Scrip'] = bank
         final_df = final_df[['Scrip','Time','Close','Prediction']]
         engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/stock')
 
-        #table and columns 
+        #table and columns aafai bancha banaunu pardaina
         final_df.to_sql(name='other_predictions', con=engine, if_exists = 'append', index=False)
 
         
